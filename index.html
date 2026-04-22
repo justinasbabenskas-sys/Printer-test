@@ -3,140 +3,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PrinterCheck Pro v2.1</title>
+    <title>PrinterCheck Pro v3.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        .selected-ok { border-color: #22c55e; background-color: #f0fdf4; color: #166534; ring: 2px; }
+        .selected-nok { border-color: #ef4444; background-color: #fef2f2; color: #991b1b; ring: 2px; }
+    </style>
 </head>
 <body class="bg-slate-50 font-sans">
-    <div id="app">
-        <div class="flex items-center justify-center min-h-screen">
-            <p class="text-gray-400 animate-pulse font-medium text-sm">Kraunama sistema...</p>
-        </div>
-    </div>
+    <div id="app"></div>
 
     <script>
-        // Duomenų bazės simuliacija
         const printers = [
             { id: "EQ-48", name: "Epson (FBA) #1", sn: "N7NE014935", model: "Stylus Pro 7890" },
             { id: "EQ-49", name: "Epson (FBA) #2", sn: "N7NE004947", model: "Stylus Pro 7890" },
             { id: "EQ-50", name: "Epson (FBA) #3", sn: "N7NE007037", model: "Stylus Pro 7890" }
         ];
 
-        let state = { view: 'login', user: localStorage.getItem('user') || null };
+        let state = { 
+            view: 'login', 
+            user: localStorage.getItem('user') || null,
+            selectedPrinter: null,
+            checkResult: null // OK arba NOK
+        };
 
         function render() {
             const app = document.getElementById('app');
             
-            // 1. LOGIN VAIZDAS
             if (!state.user) {
                 app.innerHTML = `
                     <div class="p-8 pt-20 flex flex-col items-center">
-                        <div class="w-20 h-20 bg-blue-600 rounded-3xl mb-6 shadow-xl flex items-center justify-center text-white text-3xl font-bold">P</div>
-                        <h1 class="text-3xl font-black text-slate-800 mb-2 leading-none">PrinterCheck</h1>
-                        <p class="text-slate-400 mb-10 text-sm">Gamybos valdymo mazgas</p>
-                        <div class="w-full max-w-sm bg-white p-6 rounded-3xl shadow-md border border-slate-100">
-                            <input type="text" id="username" placeholder="Operatoriaus vardas" class="w-full p-4 bg-slate-50 border-none rounded-2xl mb-4 outline-none ring-2 ring-transparent focus:ring-blue-500 transition-all text-slate-700">
-                            <button onclick="handleLogin()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform">PRISIJUNGTI</button>
+                        <h1 class="text-3xl font-black text-slate-800 mb-10">PrinterCheck <span class="text-blue-600">Pro</span></h1>
+                        <div class="w-full max-w-sm bg-white p-6 rounded-3xl shadow-xl border">
+                            <input type="text" id="username" placeholder="Operatoriaus vardas" class="w-full p-4 bg-slate-50 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-blue-500">
+                            <button onclick="handleLogin()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold shadow-lg">PRISIJUNGTI</button>
                         </div>
                     </div>`;
                 return;
             }
 
-            // 2. PAGRINDINIS DASHBOARD
-            app.innerHTML = `
-                <div class="p-6">
-                    <header class="flex justify-between items-center mb-8">
-                        <div>
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sveiki sugrįžę</p>
-                            <h2 class="text-xl font-bold text-slate-800">${state.user}</h2>
+            if (state.view === 'dashboard') {
+                app.innerHTML = `
+                    <div class="p-6">
+                        <header class="flex justify-between items-center mb-8 text-sm">
+                            <span class="font-bold text-slate-400 uppercase tracking-widest">Operatorius: ${state.user}</span>
+                            <button onclick="handleLogout()" class="text-slate-300">Atsijungti</button>
+                        </header>
+
+                        <button onclick="startScanner()" class="w-full bg-slate-900 text-white p-8 rounded-[2.5rem] mb-10 flex flex-col items-center shadow-2xl active:scale-95 transition-all">
+                            <span class="text-4xl mb-2">📸</span>
+                            <span class="text-lg font-bold uppercase">Skenuoti QR</span>
+                        </button>
+
+                        <div id="scanner-ui" class="hidden fixed inset-0 bg-black z-50 p-6 flex flex-col">
+                            <div class="flex justify-between text-white mb-4"><h3 class="font-bold">QR Skeneris</h3><button onclick="stopScanner()" class="bg-white/20 px-4 py-2 rounded-xl">X</button></div>
+                            <div id="reader" class="rounded-2xl overflow-hidden"></div>
                         </div>
-                        <button onclick="handleLogout()" class="text-slate-300 hover:text-red-500 transition-colors">Atsijungti</button>
-                    </header>
 
-                    <button onclick="startScanner()" class="w-full bg-slate-900 text-white p-8 rounded-[2.5rem] mb-10 flex flex-col items-center shadow-2xl active:scale-[0.98] transition-all border-4 border-slate-800">
-                        <span class="text-5xl mb-4">📸</span>
-                        <span class="text-xl font-black tracking-tight leading-none uppercase">Skenuoti QR kodą</span>
-                    </button>
-
-                    <div id="scanner-ui" class="hidden fixed inset-0 bg-slate-900 z-50 flex flex-col p-6">
-                        <div class="flex justify-between items-center mb-6 text-white">
-                            <h3 class="font-bold uppercase tracking-tight">Kameros skeneris</h3>
-                            <button onclick="stopScanner()" class="bg-white/10 px-5 py-2 rounded-xl font-bold">Uždaryti</button>
-                        </div>
-                        <div id="reader" class="rounded-3xl overflow-hidden border-2 border-white/20 shadow-2xl shadow-blue-500/20"></div>
-                        <p class="text-white/40 text-center mt-6 text-xs italic">Nukreipkite į printerio lipduką</p>
-                    </div>
-
-                    <div class="space-y-4">
-                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Rankinis sąrašas</h3>
-                        ${printers.map(p => `
-                            <div onclick="alert('Naudokite QR skenavimą arba pasirinkite EQ kodą')" class="bg-white p-5 rounded-2xl border border-slate-100 flex justify-between items-center shadow-sm">
-                                <div>
-                                    <span class="font-black text-slate-800 text-lg">${p.id}</span>
-                                    <span class="ml-2 text-xs text-slate-400 font-medium">${p.name}</span>
+                        <div class="space-y-3">
+                            <p class="text-[10px] font-bold text-slate-400 uppercase">Greitas pasirinkimas</p>
+                            ${printers.map(p => `
+                                <div onclick="openPrinter('${p.id}')" class="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center shadow-sm active:bg-blue-50">
+                                    <span class="font-bold text-slate-700">${p.id}</span>
+                                    <span class="text-xs text-slate-400">${p.name}</span>
                                 </div>
-                                <div class="w-8 h-8 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">→</div>
-                            </div>
-                        `).join('')}
+                            `).join('')}
+                        </div>
+                    </div>`;
+            }
+
+            if (state.view === 'printer') {
+                const p = state.selectedPrinter;
+                app.innerHTML = `
+                    <div class="fixed top-0 inset-x-0 bg-white p-4 border-b flex justify-between items-center z-10">
+                        <button onclick="state.view='dashboard'; render()" class="text-blue-600 font-bold">← Atgal</button>
+                        <h2 class="font-black text-slate-800">${p.id}</h2>
+                        <div class="w-10"></div>
                     </div>
-                </div>`;
+                    <div class="p-6 pt-24 max-w-sm mx-auto">
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 mb-6 text-center shadow-sm">
+                            <p class="text-xs text-slate-400 font-bold uppercase mb-4 tracking-widest">1 žingsnis: Pasirinkite būseną</p>
+                            <div class="grid grid-cols-2 gap-4">
+                                <button onclick="setResult('OK')" id="btn-ok" class="p-4 border-2 rounded-2xl font-bold transition-all ${state.checkResult === 'OK' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-slate-50 border-transparent text-slate-400'}">
+                                    ✅ OK
+                                </button>
+                                <button onclick="setResult('NOK')" id="btn-nok" class="p-4 border-2 rounded-2xl font-bold transition-all ${state.checkResult === 'NOK' ? 'bg-red-100 border-red-500 text-red-700' : 'bg-slate-50 border-transparent text-slate-400'}">
+                                    ❌ NOK
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 mb-8 text-center shadow-sm">
+                            <p class="text-xs text-slate-400 font-bold uppercase mb-4 tracking-widest">2 žingsnis: Nuotrauka</p>
+                            <input type="file" id="fileInput" class="hidden" accept="image/*" capture="camera" onchange="previewImage(this)">
+                            <div id="image-placeholder" onclick="document.getElementById('fileInput').click()" class="w-full aspect-video bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center overflow-hidden">
+                                <span class="text-3xl mb-2">📷</span>
+                                <span class="text-xs font-bold text-slate-400 uppercase">Nufotografuoti</span>
+                            </div>
+                        </div>
+
+                        <button onclick="handleSubmit()" id="submit-btn" class="w-full p-5 rounded-2xl font-black text-white shadow-xl transition-all ${state.checkResult ? 'bg-blue-600' : 'bg-slate-300 opacity-50 cursor-not-allowed'}">
+                            PATEIKTI DUOMENIS
+                        </button>
+                    </div>`;
+            }
         }
 
         // FUNKCIJOS
         window.handleLogin = () => {
             const user = document.getElementById('username').value;
-            if (user) {
-                localStorage.setItem('user', user);
-                state.user = user;
-                render();
-            }
+            if (user) { localStorage.setItem('user', user); state.user = user; state.view = 'dashboard'; render(); }
         };
 
-        window.handleLogout = () => {
-            localStorage.removeItem('user');
-            state.user = null;
+        window.handleLogout = () => { localStorage.removeItem('user'); state.user = null; render(); };
+
+        window.openPrinter = (id) => {
+            state.selectedPrinter = printers.find(p => p.id === id);
+            state.checkResult = null;
+            state.view = 'printer';
             render();
         };
 
-        let html5QrCode = null;
-
-        window.startScanner = () => {
-            document.getElementById('scanner-ui').classList.remove('hidden');
-            html5QrCode = new Html5Qrcode("reader");
-            html5QrCode.start(
-                { facingMode: "environment" }, 
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                (decodedText) => {
-                    const match = printers.find(p => decodedText.includes(p.id));
-                    if (match) {
-                        stopScanner();
-                        alert(`Atpažintas printeris: ${match.id}. Atidaromas polapis nuotraukai...`);
-                        // Čia bus polapis nuotraukai kitoje versijoje
-                    } else {
-                        alert(`QR nuskaitytas, bet printerio ID ${decodedText} sąraše nėra.`);
-                        stopScanner();
-                    }
-                },
-                (err) => { /* ignoruoti paieškos klaidas */ }
-            ).catch(err => {
-                alert("Klaida: Nepavyko paleisti kameros. Patikrinkite HTTPS.");
-                stopScanner();
-            });
+        window.setResult = (val) => {
+            state.checkResult = val;
+            render();
         };
 
-        window.stopScanner = () => {
-            if (html5QrCode) {
-                html5QrCode.stop().then(() => {
-                    document.getElementById('scanner-ui').classList.add('hidden');
-                }).catch(() => {
-                    document.getElementById('scanner-ui').classList.add('hidden');
-                });
-            } else {
-                document.getElementById('scanner-ui').classList.add('hidden');
+        window.previewImage = (input) => {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const box = document.getElementById('image-placeholder');
+                    box.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+                    box.classList.remove('border-dashed');
+                }
+                reader.readAsDataURL(input.files[0]);
             }
         };
 
-        // Pradinis užkrovimas
+        window.handleSubmit = () => {
+            if (!state.checkResult) { alert("Privalote pasirinkti būseną: OK arba NOK"); return; }
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) { alert("Privalote įkelti nuotrauką"); return; }
+
+            // ČIA REIKĖS PAJUNGTI GOOGLE SCRIPT URL
+            alert(`Sėkmingai išsiųsta!\nPrinteris: ${state.selectedPrinter.id}\nStatusas: ${state.checkResult}\nOperatorius: ${state.user}`);
+            state.view = 'dashboard';
+            render();
+        };
+
+        // Skenerio logika (išlieka tokia pati)
+        let html5QrCode = null;
+        window.startScanner = () => {
+            document.getElementById('scanner-ui').classList.remove('hidden');
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (text) => {
+                const p = printers.find(x => text.includes(x.id));
+                if (p) { stopScanner(); openPrinter(p.id); }
+            }).catch(err => alert("Klaida: " + err));
+        };
+        window.stopScanner = () => { if(html5QrCode) html5QrCode.stop(); document.getElementById('scanner-ui').classList.add('hidden'); };
+
+        state.view = 'dashboard';
         render();
     </script>
 </body>
