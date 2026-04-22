@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PrinterCheck Pro v3.5</title>
+    <title>PrinterCheck Pro v3.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { background-color: #f8fafc; font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
         .btn-active-ok { background-color: #f0fdf4; border-color: #22c55e; color: #166534; box-shadow: 0 0 0 2px #22c55e inset; }
         .btn-active-nok { background-color: #fef2f2; border-color: #ef4444; color: #991b1b; box-shadow: 0 0 0 2px #ef4444 inset; }
-        #reader { width: 100% !important; border: none !important; }
-        #reader video { border-radius: 1.5rem; }
+        #reader { width: 100% !important; border: none !important; min-height: 300px; }
+        #reader video { border-radius: 1.5rem; object-fit: cover; }
     </style>
 </head>
 <body>
@@ -19,6 +19,7 @@
 
     <script>
         // --- KONFIGŪRACIJA ---
+        // ČIA ĮKLIJUOKITE SAVO NAUJĄ WEB APP URL IŠ GOOGLE SCRIPT
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw3FSUHWo6S_ExAqJzfbj-HbXlzEpaPJTUAsQWYU1N6QGt1AxMhn7EGedw6e-_ffJVx9g/exec';
         
         const printers = [
@@ -31,25 +32,24 @@
             view: 'login',
             user: localStorage.getItem('pc_user') || null,
             selectedPrinter: null,
-            checkStatus: null, // OK arba NOK
+            checkStatus: null,
             isUploading: false
         };
 
-        // --- PAGRINDINIS RENDERIS ---
         function render() {
             const app = document.getElementById('app');
 
             if (!state.user) {
                 app.innerHTML = `
                     <div class="p-8 pt-24 text-center">
-                        <div class="inline-block w-20 h-20 bg-blue-600 rounded-[2rem] shadow-2xl shadow-blue-200 mb-8 flex items-center justify-center">
+                        <div class="inline-block w-20 h-20 bg-blue-600 rounded-[2rem] shadow-2xl mb-8 flex items-center justify-center">
                             <span class="text-white text-4xl">📸</span>
                         </div>
                         <h1 class="text-3xl font-black text-slate-900 mb-2 italic uppercase">PrinterCheck</h1>
-                        <p class="text-slate-400 mb-12 font-medium">Techninės patikros sistema</p>
-                        <div class="bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100">
-                            <input type="text" id="login-user" placeholder="Jūsų vardas" class="w-full p-5 bg-slate-50 border-none rounded-2xl mb-4 outline-none ring-2 ring-transparent focus:ring-blue-500 text-lg font-medium text-slate-700">
-                            <button onclick="login()" class="w-full bg-blue-600 text-white p-5 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform uppercase tracking-wider">Prisijungti</button>
+                        <p class="text-slate-400 mb-12 font-medium text-sm tracking-wide">Gamybos kokybės kontrolė</p>
+                        <div class="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100">
+                            <input type="text" id="login-user" placeholder="Jūsų vardas" class="w-full p-5 bg-slate-50 border-none rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-blue-500 text-lg font-medium">
+                            <button onclick="login()" class="w-full bg-blue-600 text-white p-5 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all uppercase">Prisijungti</button>
                         </div>
                     </div>`;
                 return;
@@ -60,36 +60,30 @@
                     <div class="p-6">
                         <header class="flex justify-between items-end mb-10">
                             <div>
-                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sveiki sugrįžę</p>
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Technologas / Operatorius</p>
                                 <h2 class="text-2xl font-black text-slate-900">${state.user}</h2>
                             </div>
-                            <button onclick="logout()" class="text-slate-300 text-sm font-bold border-b-2 border-slate-100 pb-1">Atsijungti</button>
+                            <button onclick="logout()" class="text-slate-300 text-sm font-bold border-b-2 border-slate-100 pb-1">Išeiti</button>
                         </header>
 
-                        <button onclick="startQR()" class="w-full bg-slate-900 text-white p-10 rounded-[3rem] mb-12 flex flex-col items-center justify-center gap-4 shadow-2xl border-b-8 border-slate-950 active:scale-95 transition-all">
+                        <button onclick="startQR()" class="w-full bg-slate-900 text-white p-10 rounded-[3rem] mb-10 flex flex-col items-center justify-center gap-4 shadow-2xl active:scale-95 transition-all">
                             <span class="text-5xl">📷</span>
-                            <span class="text-xl font-black tracking-tighter uppercase">Skenuoti QR kodą</span>
+                            <span class="text-xl font-black uppercase tracking-tight">Skenuoti QR</span>
                         </button>
 
                         <div id="qr-modal" class="hidden fixed inset-0 bg-slate-900 z-50 p-6 flex flex-col justify-center">
                             <div class="flex justify-between items-center mb-6 text-white">
-                                <h3 class="font-black uppercase italic tracking-widest text-blue-400">QR Skeneris</h3>
+                                <h3 class="font-black uppercase tracking-widest text-blue-400">Skeneris</h3>
                                 <button onclick="stopQR()" class="bg-white/10 px-6 py-2 rounded-xl font-bold">Uždaryti</button>
                             </div>
-                            <div id="reader"></div>
+                            <div id="reader" class="shadow-2xl shadow-blue-500/10"></div>
                         </div>
 
-                        <div class="space-y-4">
-                            <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] ml-1">Rankinis sąrašas</h3>
+                        <div class="space-y-3">
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Rankinis pasirinkimas</p>
                             ${printers.map(p => `
-                                <div onclick="openPrinter('${p.id}')" class="bg-white p-5 rounded-3xl border border-slate-100 flex justify-between items-center shadow-sm active:bg-blue-50 transition-colors">
-                                    <div class="flex items-center gap-4">
-                                        <div class="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center font-black text-blue-600">${p.id.split('-')[1]}</div>
-                                        <div>
-                                            <div class="font-black text-slate-800 text-lg leading-tight">${p.id}</div>
-                                            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">${p.name}</div>
-                                        </div>
-                                    </div>
+                                <div onclick="openPrinter('${p.id}')" class="bg-white p-5 rounded-3xl border border-slate-100 flex justify-between items-center shadow-sm active:bg-blue-50 transition-all">
+                                    <div class="font-black text-slate-800 text-lg">${p.id}</div>
                                     <div class="text-slate-200 text-2xl font-black">→</div>
                                 </div>
                             `).join('')}
@@ -101,42 +95,35 @@
                 const p = state.selectedPrinter;
                 app.innerHTML = `
                     <div class="bg-white p-6 border-b sticky top-0 z-10 flex items-center justify-between shadow-sm">
-                        <button onclick="state.view='dashboard'; render()" class="text-blue-600 font-black flex items-center gap-2">← <span class="text-xs uppercase tracking-widest">Atgal</span></button>
-                        <div class="text-right leading-none">
-                            <h2 class="text-xl font-black text-slate-900">${p.id}</h2>
-                            <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">${p.sn}</p>
-                        </div>
+                        <button onclick="state.view='dashboard'; render()" class="text-blue-600 font-black">← ATGAL</button>
+                        <h2 class="text-xl font-black text-slate-900 leading-none">${p.id}</h2>
                     </div>
 
-                    <div class="p-6 pb-20">
+                    <div class="p-6 pb-24">
                         <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 mb-6 shadow-sm">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 text-center text-center">1. Purkštukų būklė (privaloma)</p>
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 text-center">Būklė (Privaloma)</p>
                             <div class="grid grid-cols-2 gap-4">
-                                <button onclick="setStatus('OK')" class="p-6 border-4 rounded-3xl flex flex-col items-center gap-2 transition-all ${state.checkStatus === 'OK' ? 'btn-active-ok' : 'bg-slate-50 border-transparent text-slate-400 opacity-50'}">
-                                    <span class="text-2xl">✅</span><span class="font-black uppercase tracking-tighter italic text-lg">Viskas OK</span>
+                                <button onclick="setStatus('OK')" class="p-6 border-4 rounded-3xl flex flex-col items-center gap-2 transition-all ${state.checkStatus === 'OK' ? 'btn-active-ok' : 'bg-slate-50 border-transparent opacity-40'}">
+                                    <span class="text-2xl">✅</span><span class="font-black italic uppercase">GERAS</span>
                                 </button>
-                                <button onclick="setStatus('NOK')" class="p-6 border-4 rounded-3xl flex flex-col items-center gap-2 transition-all ${state.checkStatus === 'NOK' ? 'btn-active-nok' : 'bg-slate-50 border-transparent text-slate-400 opacity-50'}">
-                                    <span class="text-2xl">❌</span><span class="font-black uppercase tracking-tighter italic text-lg">Yra NOK</span>
+                                <button onclick="setStatus('NOK')" class="p-6 border-4 rounded-3xl flex flex-col items-center gap-2 transition-all ${state.checkStatus === 'NOK' ? 'btn-active-nok' : 'bg-slate-50 border-transparent opacity-40'}">
+                                    <span class="text-2xl">❌</span><span class="font-black italic uppercase">BLOGAS</span>
                                 </button>
                             </div>
                         </div>
 
-                        <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 mb-10 shadow-sm">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 text-center text-center">2. Nozzle Check nuotrauka</p>
+                        <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 mb-8 shadow-sm text-center">
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Nozzle Check Foto</p>
                             <input type="file" id="file-input" class="hidden" accept="image/*" capture="camera" onchange="previewImg(this)">
-                            <div id="img-preview" onclick="document.getElementById('file-input').click()" class="w-full aspect-video bg-slate-50 rounded-[2rem] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center overflow-hidden transition-all active:scale-95">
-                                <div class="text-4xl mb-2 text-slate-200">📸</div>
-                                <span class="text-[10px] font-black text-slate-300 uppercase tracking-widest">Nufotografuoti</span>
+                            <div id="img-preview" onclick="document.getElementById('file-input').click()" class="w-full aspect-video bg-slate-50 rounded-[2rem] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center overflow-hidden active:scale-95 transition-all">
+                                <div class="text-4xl mb-1">📸</div>
+                                <span class="text-[10px] font-black text-slate-300 uppercase tracking-widest tracking-widest">Fotografuoti</span>
                             </div>
                         </div>
 
-                        <button id="submit-btn" onclick="submitData()" class="w-full p-6 rounded-[2rem] font-black text-xl italic tracking-tight shadow-2xl transition-all ${state.checkStatus && !state.isUploading ? 'bg-blue-600 text-white border-b-8 border-blue-800' : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-50'}" ${(!state.checkStatus || state.isUploading) ? 'disabled' : ''}>
-                            ${state.isUploading ? 'SIUNČIAMA...' : 'PATVIRTINTI IR SIŲSTI'}
+                        <button id="submit-btn" onclick="submitData()" class="w-full p-6 rounded-[2rem] font-black text-xl italic shadow-2xl transition-all ${state.checkStatus && !state.isUploading ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}" ${(!state.checkStatus || state.isUploading) ? 'disabled' : ''}>
+                            ${state.isUploading ? 'SIUNČIAMA...' : 'SIŲSTI DUOMENIS'}
                         </button>
-                        
-                        <div id="upload-status" class="hidden mt-6 p-4 bg-blue-50 text-blue-600 rounded-2xl text-center font-bold text-sm animate-pulse">
-                            📦 Duomenys perduodami technologui...
-                        </div>
                     </div>`;
             }
         }
@@ -144,20 +131,10 @@
         // --- FUNKCIJOS ---
         window.login = () => {
             const name = document.getElementById('login-user').value.trim();
-            if (name) {
-                localStorage.setItem('pc_user', name);
-                state.user = name;
-                state.view = 'dashboard';
-                render();
-            }
+            if (name) { localStorage.setItem('pc_user', name); state.user = name; state.view = 'dashboard'; render(); }
         };
 
-        window.logout = () => {
-            localStorage.removeItem('pc_user');
-            state.user = null;
-            state.view = 'login';
-            render();
-        };
+        window.logout = () => { localStorage.removeItem('pc_user'); state.user = null; state.view = 'login'; render(); };
 
         window.openPrinter = (id) => {
             state.selectedPrinter = printers.find(p => p.id === id);
@@ -166,10 +143,7 @@
             render();
         };
 
-        window.setStatus = (s) => {
-            state.checkStatus = s;
-            render();
-        };
+        window.setStatus = (s) => { state.checkStatus = s; render(); };
 
         window.previewImg = (input) => {
             if (input.files && input.files[0]) {
@@ -190,21 +164,18 @@
             scanner.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, (txt) => {
                 const found = printers.find(p => txt.includes(p.id));
                 if (found) { stopQR(); openPrinter(found.id); }
-            }).catch(e => alert("Klaida: " + e));
+            }).catch(e => alert("Kamera nepasiekiama. Patikrinkite nustatymus."));
         };
 
-        window.stopQR = () => {
-            if (scanner) scanner.stop();
-            document.getElementById('qr-modal').classList.add('hidden');
-        };
+        window.stopQR = () => { if (scanner) scanner.stop(); document.getElementById('qr-modal').classList.add('hidden'); };
 
         window.submitData = () => {
-            const file = document.getElementById('file-input').files[0];
-            if (!file) { alert("Prašome nufotografuoti nozzle check!"); return; }
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            if (!file) { alert("Nufotografuokite purkštukų testą!"); return; }
 
             state.isUploading = true;
             render();
-            document.getElementById('upload-status').classList.remove('hidden');
 
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -217,16 +188,16 @@
 
                 fetch(SCRIPT_URL, {
                     method: 'POST',
-                    mode: 'no-cors', // Naudojame no-cors, kad išvengtume naršyklės saugumo blokavimo
-                    cache: 'no-cache',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(payload)
                 }).then(() => {
-                    alert("✅ Pavyko! Duomenys sėkmingai išsiųsti į Google Sheets.");
+                    alert("Pavyko! Patikrinkite lentelę.");
                     state.isUploading = false;
                     state.view = 'dashboard';
                     render();
                 }).catch(err => {
-                    alert("❌ Klaida: " + err);
+                    alert("Ryšio klaida: " + err);
                     state.isUploading = false;
                     render();
                 });
@@ -234,7 +205,6 @@
             reader.readAsDataURL(file);
         };
 
-        // Paleidimas
         state.view = state.user ? 'dashboard' : 'login';
         render();
     </script>
