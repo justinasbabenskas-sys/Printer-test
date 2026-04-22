@@ -2,167 +2,133 @@
 <html lang="lt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PrinterCheck Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrinterCheck</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f4f4f4; text-align: center; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        input, button { width: 100%; padding: 15px; margin-top: 10px; border-radius: 10px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
+        button { background: #007bff; color: white; font-weight: bold; cursor: pointer; border: none; }
+        .ok { background: #28a745; margin-bottom: 10px; }
+        .nok { background: #dc3545; }
+        .hidden { display: none; }
+        img { max-width: 100%; margin-top: 10px; border-radius: 10px; }
+    </style>
 </head>
-<body class="bg-gray-100 font-sans">
-    <div id="app" class="max-w-md mx-auto min-h-screen bg-white shadow-lg relative">
-        <div id="loading" class="p-20 text-center text-gray-400">Kraunama sistema...</div>
+<body>
+
+    <div id="app" class="card">
+        <h2>PrinterCheck Pro</h2>
+        <div id="login-view">
+            <input type="text" id="user-name" placeholder="Jūsų vardas">
+            <button onclick="doLogin()">PRISIJUNGTI</button>
+        </div>
+
+        <div id="main-view" class="hidden">
+            <p>Sveiki, <b id="display-name"></b></p>
+            <hr>
+            <div id="printer-list">
+                <button onclick="selectPrinter('EQ-48')">EQ-48 (Epson #1)</button>
+                <button onclick="selectPrinter('EQ-49')">EQ-49 (Epson #2)</button>
+                <button onclick="selectPrinter('EQ-50')">EQ-50 (Epson #3)</button>
+            </div>
+        </div>
+
+        <div id="check-view" class="hidden">
+            <button onclick="goBack()" style="background:none; color:#007bff; font-size:12px;">← ATGAL</button>
+            <h3 id="selected-id"></h3>
+            <button class="ok" onclick="setStatus('OK')">✅ VISKAS OK</button>
+            <button class="nok" onclick="setStatus('NOK')">❌ YRA NOK</button>
+            <p id="status-text" style="font-weight:bold;"></p>
+            
+            <input type="file" id="photo-input" accept="image/*" capture="camera" onchange="preview(this)">
+            <div id="preview-area"></div>
+            
+            <button id="send-btn" class="hidden" style="background:#333;" onclick="upload()">SIŲSTI TECHNOLOGUI</button>
+        </div>
     </div>
 
     <script>
-        // JŪSŲ NAUJAUSIAS URL IŠ GOOGLE SCRIPTS
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwqW-qMDPEOjO1QyhGqjNTOiPqrVneu7sSKo0jitxGfFuzxEbGNTx5y86ClSO_Ljmcb/exec';
+        let currentUser = "";
+        let currentPrinter = "";
+        let currentStatus = "";
+        let currentImage = "";
 
-        const printers = [
-            { id: "EQ-48", name: "Epson #1" },
-            { id: "EQ-49", name: "Epson #2" },
-            { id: "EQ-50", name: "Epson #3" }
-        ];
-
-        let state = {
-            view: localStorage.getItem('pc_user') ? 'dashboard' : 'login',
-            user: localStorage.getItem('pc_user') || null,
-            selectedPrinter: null,
-            checkStatus: null,
-            image: null
-        };
-
-        function render() {
-            const app = document.getElementById('app');
-            
-            if (state.view === 'login') {
-                app.innerHTML = `
-                    <div class="p-8 pt-24 text-center">
-                        <h1 class="text-3xl font-black text-blue-600 mb-2 italic">PrinterCheck</h1>
-                        <p class="text-gray-400 text-xs mb-12 uppercase tracking-widest">Gamybos Kontrolė</p>
-                        <div class="space-y-4">
-                            <input type="text" id="u-name" placeholder="Vardas" class="w-full p-5 bg-gray-50 border rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-bold">
-                            <button onclick="login()" class="w-full bg-blue-600 text-white p-5 rounded-2xl font-bold shadow-lg">PRISIJUNGTI</button>
-                        </div>
-                    </div>`;
-            } 
-            
-            else if (state.view === 'dashboard') {
-                app.innerHTML = `
-                    <div class="p-6">
-                        <div class="flex justify-between items-center mb-10 border-b pb-4">
-                            <h2 class="font-bold text-gray-800">${state.user}</h2>
-                            <button onclick="logout()" class="text-xs text-red-400 font-bold">IŠEITI</button>
-                        </div>
-                        <button onclick="startScanner()" class="w-full bg-black text-white p-10 rounded-[2.5rem] mb-10 flex flex-col items-center gap-4 shadow-xl active:scale-95 transition-all">
-                            <span class="text-5xl">📷</span>
-                            <span class="font-black uppercase tracking-tighter italic">Skenuoti QR Kodą</span>
-                        </button>
-                        <div id="reader" class="hidden mb-6 rounded-2xl overflow-hidden border"></div>
-                        <div class="space-y-3">
-                            <p class="text-[10px] font-bold text-gray-300 uppercase ml-1">Rankinis sąrašas</p>
-                            ${printers.map(p => `
-                                <div onclick="openP('${p.id}')" class="p-5 border rounded-2xl flex justify-between items-center active:bg-gray-50">
-                                    <span class="font-black text-gray-700">${p.id}</span>
-                                    <span class="text-gray-300">→</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>`;
-            }
-
-            else if (state.view === 'printer') {
-                const p = state.selectedPrinter;
-                app.innerHTML = `
-                    <div class="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
-                        <button onclick="state.view='dashboard';render()" class="text-blue-600 font-bold">← ATGAL</button>
-                        <h2 class="font-black uppercase italic">${p.id}</h2>
-                        <div class="w-10"></div>
-                    </div>
-                    <div class="p-6">
-                        <div class="grid grid-cols-2 gap-4 mb-8">
-                            <button onclick="setStatus('OK')" class="p-6 border-4 rounded-3xl flex flex-col items-center gap-2 ${state.checkStatus === 'OK' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-50 text-gray-300'}">
-                                <span class="text-2xl font-bold">✅ OK</span>
-                            </button>
-                            <button onclick="setStatus('NOK')" class="p-6 border-4 rounded-3xl flex flex-col items-center gap-2 ${state.checkStatus === 'NOK' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-50 text-gray-300'}">
-                                <span class="text-2xl font-bold">❌ NOK</span>
-                            </button>
-                        </div>
-                        <input type="file" id="f-in" class="hidden" accept="image/*" capture="camera" onchange="procImg(this)">
-                        <div onclick="document.getElementById('f-in').click()" class="w-full aspect-video bg-gray-50 rounded-3xl border-2 border-dashed flex flex-col items-center justify-center mb-10 overflow-hidden relative">
-                            ${state.image ? `<img src="${state.image}" class="w-full h-full object-cover">` : '<span class="text-gray-400 font-bold uppercase text-xs tracking-widest">📸 Nufotografuoti</span>'}
-                        </div>
-                        <button id="send-btn" onclick="send()" class="w-full p-5 rounded-2xl font-black italic tracking-tighter ${state.checkStatus && state.image ? 'bg-blue-600 text-white shadow-xl' : 'bg-gray-100 text-gray-300 cursor-not-allowed'}" ${!state.checkStatus || !state.image ? 'disabled' : ''}>PATEIKTI TECHNOLOGUI</button>
-                    </div>`;
+        function doLogin() {
+            const name = document.getElementById('user-name').value;
+            if (name) {
+                currentUser = name;
+                document.getElementById('display-name').innerText = name;
+                document.getElementById('login-view').classList.add('hidden');
+                document.getElementById('main-view').classList.remove('hidden');
             }
         }
 
-        // --- FUNKCIJOS ---
-        window.login = () => {
-            const n = document.getElementById('u-name').value.trim();
-            if(n) { localStorage.setItem('pc_user', n); state.user = n; state.view = 'dashboard'; render(); }
-        };
+        function selectPrinter(id) {
+            currentPrinter = id;
+            document.getElementById('selected-id').innerText = id;
+            document.getElementById('main-view').classList.add('hidden');
+            document.getElementById('check-view').classList.remove('hidden');
+        }
 
-        window.logout = () => { localStorage.removeItem('pc_user'); state.user = null; state.view = 'login'; render(); };
+        function setStatus(s) {
+            currentStatus = s;
+            document.getElementById('status-text').innerText = "PASIRINKTA: " + s;
+            checkReady();
+        }
 
-        window.openP = (id) => { 
-            state.selectedPrinter = printers.find(p => p.id === id); 
-            state.checkStatus = null; state.image = null; state.view = 'printer'; 
-            render(); 
-        };
-
-        window.setStatus = (s) => { state.checkStatus = s; render(); };
-
-        window.procImg = (i) => {
-            if(i.files[0]) {
-                const r = new FileReader();
-                r.onload = (e) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const MAX_W = 1000;
-                        let w = img.width, h = img.height;
-                        if (w > MAX_W) { h *= MAX_W / w; w = MAX_W; }
-                        canvas.width = w; canvas.height = h;
-                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                        state.image = canvas.toDataURL('image/jpeg', 0.7);
-                        render();
-                    };
-                    img.src = e.target.result;
+        function preview(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    currentImage = e.target.result;
+                    document.getElementById('preview-area').innerHTML = '<img src="'+e.target.result+'">';
+                    checkReady();
                 };
-                r.readAsDataURL(i.files[0]);
+                reader.readAsDataURL(input.files[0]);
             }
-        };
+        }
 
-        let scanner = null;
-        window.startScanner = () => {
-            const r = document.getElementById('reader'); r.classList.remove('hidden');
-            scanner = new Html5Qrcode("reader");
-            scanner.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, (t) => {
-                const p = printers.find(x => t.includes(x.id));
-                if(p) { scanner.stop(); r.classList.add('hidden'); openP(p.id); }
-            }).catch(e => alert("Klaida: " + e));
-        };
+        function checkReady() {
+            if (currentStatus && currentImage) {
+                document.getElementById('send-btn').classList.remove('hidden');
+            }
+        }
 
-        window.send = () => {
+        function goBack() {
+            document.getElementById('check-view').classList.add('hidden');
+            document.getElementById('main-view').classList.remove('hidden');
+            currentStatus = ""; currentImage = "";
+            document.getElementById('preview-area').innerHTML = "";
+            document.getElementById('status-text').innerText = "";
+        }
+
+        function upload() {
             const btn = document.getElementById('send-btn');
-            btn.innerText = "SIUNČIAMA..."; btn.disabled = true;
-            
-            const payload = { printerId: state.selectedPrinter.id, status: state.checkStatus, user: state.user, image: state.image };
-            
-            fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) })
-            .then(() => { 
-                alert("✅ Pavyko! Duomenys išsiųsti."); 
-                state.view = 'dashboard'; 
-                render(); 
-            })
-            .catch(e => { 
-                alert("Klaida: " + e); 
-                btn.disabled = false; btn.innerText = "PATEIKTI TECHNOLOGUI"; 
-            });
-        };
+            btn.innerText = "SIUNČIAMA...";
+            btn.disabled = true;
 
-        // Pradžia
-        document.getElementById('loading').remove();
-        render();
+            const payload = {
+                printerId: currentPrinter,
+                status: currentStatus,
+                user: currentUser,
+                image: currentImage
+            };
+
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify(payload)
+            }).then(() => {
+                alert("Pavyko! Duomenys lentelėje.");
+                location.reload();
+            }).catch(e => {
+                alert("Klaida: " + e);
+                btn.disabled = false;
+                btn.innerText = "BANDYTI DAR KARTĄ";
+            });
+        }
     </script>
 </body>
 </html>
