@@ -2,133 +2,109 @@
 <html lang="lt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PrinterCheck</title>
-    <style>
-        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f4f4f4; text-align: center; }
-        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        input, button { width: 100%; padding: 15px; margin-top: 10px; border-radius: 10px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
-        button { background: #007bff; color: white; font-weight: bold; cursor: pointer; border: none; }
-        .ok { background: #28a745; margin-bottom: 10px; }
-        .nok { background: #dc3545; }
-        .hidden { display: none; }
-        img { max-width: 100%; margin-top: 10px; border-radius: 10px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PrinterCheck Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
-<body>
-
-    <div id="app" class="card">
-        <h2>PrinterCheck Pro</h2>
-        <div id="login-view">
-            <input type="text" id="user-name" placeholder="Jūsų vardas">
-            <button onclick="doLogin()">PRISIJUNGTI</button>
-        </div>
-
-        <div id="main-view" class="hidden">
-            <p>Sveiki, <b id="display-name"></b></p>
-            <hr>
-            <div id="printer-list">
-                <button onclick="selectPrinter('EQ-48')">EQ-48 (Epson #1)</button>
-                <button onclick="selectPrinter('EQ-49')">EQ-49 (Epson #2)</button>
-                <button onclick="selectPrinter('EQ-50')">EQ-50 (Epson #3)</button>
-            </div>
-        </div>
-
-        <div id="check-view" class="hidden">
-            <button onclick="goBack()" style="background:none; color:#007bff; font-size:12px;">← ATGAL</button>
-            <h3 id="selected-id"></h3>
-            <button class="ok" onclick="setStatus('OK')">✅ VISKAS OK</button>
-            <button class="nok" onclick="setStatus('NOK')">❌ YRA NOK</button>
-            <p id="status-text" style="font-weight:bold;"></p>
-            
-            <input type="file" id="photo-input" accept="image/*" capture="camera" onchange="preview(this)">
-            <div id="preview-area"></div>
-            
-            <button id="send-btn" class="hidden" style="background:#333;" onclick="upload()">SIŲSTI TECHNOLOGUI</button>
-        </div>
-    </div>
+<body class="bg-slate-950 text-white font-sans antialiased">
+    <div id="app" class="max-w-md mx-auto min-h-screen p-6 flex flex-col"></div>
 
     <script>
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwqW-qMDPEOjO1QyhGqjNTOiPqrVneu7sSKo0jitxGfFuzxEbGNTx5y86ClSO_Ljmcb/exec';
-        let currentUser = "";
-        let currentPrinter = "";
-        let currentStatus = "";
-        let currentImage = "";
+        // --- TAVO SUPABASE KONFIGŪRACIJA ---
+        const SUPABASE_URL = 'https://uzffsxjdiyrghjsdtjos.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_IoeibCKt5UBXZBDzuL_s-A_B5uZtScR'; 
+        
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        function doLogin() {
-            const name = document.getElementById('user-name').value;
-            if (name) {
-                currentUser = name;
-                document.getElementById('display-name').innerText = name;
-                document.getElementById('login-view').classList.add('hidden');
-                document.getElementById('main-view').classList.remove('hidden');
+        let state = { view: 'login', user: localStorage.getItem('u') || '', printer: '', status: '', image: null, loading: false };
+
+        function render() {
+            const container = document.getElementById('app');
+            
+            if (state.view === 'login') {
+                container.innerHTML = `
+                    <div class="pt-24 text-center">
+                        <div class="w-20 h-20 bg-blue-600 rounded-[2rem] mx-auto mb-8 flex items-center justify-center shadow-2xl shadow-blue-500/20 text-3xl font-bold italic text-white uppercase font-black tracking-widest">P</div>
+                        <h1 class="text-4xl font-black mb-10 italic uppercase tracking-tighter text-white">PrinterCheck</h1>
+                        <input id="u" type="text" placeholder="Jūsų vardas" class="w-full p-5 rounded-3xl bg-slate-900 border-2 border-slate-800 mb-4 text-white font-bold outline-none focus:border-blue-600 transition-all text-center">
+                        <button onclick="login()" class="w-full bg-blue-600 p-5 rounded-3xl font-black text-lg uppercase tracking-widest active:scale-95 transition-all shadow-xl shadow-blue-900/40 text-white">Prisijungti</button>
+                    </div>`;
+            } else if (state.view === 'main') {
+                container.innerHTML = `
+                    <div class="flex justify-between items-center mb-12 border-b border-slate-800 pb-6 uppercase font-black text-[10px] tracking-[0.2em] text-slate-500">
+                        <span>Operatorius: ${state.user}</span>
+                        <button onclick="logout()" class="text-red-500">IŠEITI</button>
+                    </div>
+                    <div class="space-y-4">
+                        ${['EQ-48', 'EQ-49', 'EQ-50'].map(id => `
+                            <button onclick="sel('${id}')" class="w-full p-6 bg-slate-900 rounded-[2rem] text-left font-black text-2xl border-2 border-slate-800 hover:border-blue-600 transition-all flex justify-between items-center italic tracking-tighter text-white">${id} <span>→</span></button>
+                        `).join('')}
+                    </div>`;
+            } else if (state.view === 'form') {
+                container.innerHTML = `
+                    <button onclick="state.view='main';render()" class="mb-4 text-blue-500 font-bold uppercase text-xs tracking-widest leading-none">← Atgal</button>
+                    <h2 class="text-5xl font-black mb-10 italic uppercase tracking-tighter text-blue-500">${state.printer}</h2>
+                    <div class="grid grid-cols-2 gap-4 mb-8 italic">
+                        <button onclick="st('OK')" class="p-6 rounded-3xl border-4 transition-all ${state.status==='OK'?'border-green-500 bg-green-500/10 text-green-400 font-black':'border-slate-800 text-slate-600'} text-center font-bold">OK</button>
+                        <button onclick="st('NOK')" class="p-6 rounded-3xl border-4 transition-all ${state.status==='NOK'?'border-red-500 bg-red-500/10 text-red-400 font-black':'border-slate-800 text-slate-600'} text-center font-bold">NOK</button>
+                    </div>
+                    <input type="file" id="f" class="hidden" accept="image/*" capture="camera" onchange="hdl(this)">
+                    <div onclick="document.getElementById('f').click()" class="w-full aspect-square bg-slate-900 rounded-[3rem] mb-12 flex flex-col items-center justify-center border-4 border-dashed ${state.image?'border-blue-600':'border-slate-800'} overflow-hidden relative">
+                        ${state.image ? `<img src="${state.image}" class="w-full h-full object-cover">` : '<span class="text-4xl">📸</span><span class="text-[10px] font-black text-slate-600 uppercase mt-2">Nufotografuoti</span>'}
+                    </div>
+                    <button id="sb" onclick="send()" class="w-full p-6 rounded-[2.5rem] font-black text-2xl italic tracking-tighter transition-all ${state.status&&state.image&&!state.loading?'bg-blue-600 text-white shadow-xl shadow-blue-600/30':'bg-slate-900 text-slate-800 border-2 border-slate-800'}" ${!state.status||!state.image||state.loading?'disabled':''}>
+                        ${state.loading ? '📦 Siunčiama...' : 'PATVIRTINTI'}
+                    </button>`;
             }
         }
 
-        function selectPrinter(id) {
-            currentPrinter = id;
-            document.getElementById('selected-id').innerText = id;
-            document.getElementById('main-view').classList.add('hidden');
-            document.getElementById('check-view').classList.remove('hidden');
-        }
+        window.login = () => { const v = document.getElementById('u').value.trim(); if(v){ state.user=v; localStorage.setItem('u',v); state.view='main'; render(); }};
+        window.logout = () => { localStorage.clear(); location.reload(); };
+        window.sel = (id) => { state.printer=id; state.view='form'; state.status=''; state.image=null; render(); };
+        window.st = (s) => { state.status=s; render(); };
+        window.hdl = (i) => { 
+            if(i.files[0]){ 
+                const r=new FileReader(); 
+                r.onload=(e)=>{ 
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_W = 800; 
+                        let w = img.width, h = img.height;
+                        if (w > MAX_W) { h *= MAX_W / w; w = MAX_W; }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        state.image = canvas.toDataURL('image/jpeg', 0.6);
+                        render();
+                    };
+                    img.src = e.target.result;
+                }; 
+                r.readAsDataURL(i.files[0]); 
+            }
+        };
 
-        function setStatus(s) {
-            currentStatus = s;
-            document.getElementById('status-text').innerText = "PASIRINKTA: " + s;
-            checkReady();
-        }
-
-        function preview(input) {
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    currentImage = e.target.result;
-                    document.getElementById('preview-area').innerHTML = '<img src="'+e.target.result+'">';
-                    checkReady();
-                };
-                reader.readAsDataURL(input.files[0]);
+        async function send() {
+            state.loading = true; render();
+            try {
+                const { error } = await supabaseClient
+                    .from('NozzleChecks') 
+                    .insert([{ 
+                        printer_id: state.printer, 
+                        status: state.status, 
+                        operator: state.user, 
+                        image_url: state.image 
+                    }]);
+                if (error) throw error;
+                alert("✅ SĖKMINGAI IŠSIŲSTA!");
+                state.view = 'main';
+            } catch (e) {
+                alert("❌ KLAIDA: " + e.message);
+            } finally {
+                state.loading = false; render();
             }
         }
-
-        function checkReady() {
-            if (currentStatus && currentImage) {
-                document.getElementById('send-btn').classList.remove('hidden');
-            }
-        }
-
-        function goBack() {
-            document.getElementById('check-view').classList.add('hidden');
-            document.getElementById('main-view').classList.remove('hidden');
-            currentStatus = ""; currentImage = "";
-            document.getElementById('preview-area').innerHTML = "";
-            document.getElementById('status-text').innerText = "";
-        }
-
-        function upload() {
-            const btn = document.getElementById('send-btn');
-            btn.innerText = "SIUNČIAMA...";
-            btn.disabled = true;
-
-            const payload = {
-                printerId: currentPrinter,
-                status: currentStatus,
-                user: currentUser,
-                image: currentImage
-            };
-
-            fetch(SCRIPT_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                body: JSON.stringify(payload)
-            }).then(() => {
-                alert("Pavyko! Duomenys lentelėje.");
-                location.reload();
-            }).catch(e => {
-                alert("Klaida: " + e);
-                btn.disabled = false;
-                btn.innerText = "BANDYTI DAR KARTĄ";
-            });
-        }
+        render();
     </script>
 </body>
 </html>
