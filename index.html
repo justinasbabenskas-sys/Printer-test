@@ -2,19 +2,21 @@
 <html lang="lt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>PrinterCheck Pro - QR Scanner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { background-color: #f0f2f5; font-family: sans-serif; }
-        #reader { width: 100%; border-radius: 1rem; overflow: hidden; border: none !important; }
+        body { background-color: #f8fafc; font-family: -apple-system, sans-serif; }
+        #reader { width: 100% !important; border: none !important; }
+        #reader video { border-radius: 1rem; }
     </style>
 </head>
 <body>
-    <div id="app" class="max-w-md mx-auto min-h-screen pb-10"></div>
+    <div id="app" class="max-w-md mx-auto min-h-screen"></div>
 
     <script>
+        // Jūsų spausdintuvų sąrašas (galime pildyti iki 50)
         const printers = [
             { id: "EQ-48", name: "Epson (FBA) #1", sn: "N7NE014935", model: "Stylus Pro 7890" },
             { id: "EQ-49", name: "Epson (FBA) #2", sn: "N7NE004947", model: "Stylus Pro 7890" },
@@ -29,40 +31,52 @@
             
             if (state.view === 'login') {
                 app.innerHTML = `
-                    <div class="p-8 pt-20">
-                        <div class="text-center mb-10">
-                            <h1 class="text-3xl font-bold text-blue-600">PrinterCheck Pro</h1>
-                        </div>
-                        <div class="bg-white p-6 rounded-2xl shadow-xl">
-                            <input type="text" id="userId" class="w-full p-4 border rounded-xl mb-4" placeholder="Darbuotojo ID">
-                            <button onclick="login()" class="w-full bg-blue-600 text-white p-4 rounded-xl font-bold">PRISIJUNGTI</button>
+                    <div class="p-8 pt-20 text-center">
+                        <h1 class="text-3xl font-bold text-blue-600 mb-2">PrinterCheck Pro</h1>
+                        <p class="text-gray-500 mb-8">Įveskite duomenis pradinėms patikroms</p>
+                        <div class="bg-white p-6 rounded-3xl shadow-xl border">
+                            <input type="text" id="userId" class="w-full p-4 bg-gray-50 border rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Darbuotojo Vardas">
+                            <button onclick="login()" class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold shadow-lg active:scale-95 transition">PRISIJUNGTI</button>
                         </div>
                     </div>`;
             } 
             
             else if (state.view === 'dashboard') {
                 app.innerHTML = `
-                    <div class="p-4">
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="font-bold uppercase text-gray-500 text-sm tracking-widest">Sveiki, ${state.user}</h2>
-                            <button onclick="logout()" class="text-red-500 text-sm">Atsijungti</button>
+                    <div class="p-5">
+                        <div class="flex justify-between items-center mb-8">
+                            <div>
+                                <p class="text-xs font-bold text-gray-400 uppercase">Operatorius</p>
+                                <h2 class="text-lg font-bold text-gray-800">${state.user}</h2>
+                            </div>
+                            <button onclick="state.view='login'; render()" class="bg-gray-100 p-2 rounded-lg text-gray-400 text-sm">Atsijungti</button>
                         </div>
                         
-                        <button onclick="startScanner()" class="w-full bg-black text-white p-6 rounded-2xl font-bold mb-6 flex items-center justify-center gap-3 shadow-lg active:scale-95 transition">
-                            <span class="text-2xl">📷</span> SKENUOTI QR KODĄ
-                        </button>
-
-                        <div id="scanner-container" class="hidden mb-6 bg-black rounded-2xl overflow-hidden relative">
-                            <div id="reader"></div>
-                            <button onclick="stopScanner()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-lg z-50">Atšaukti</button>
+                        <div id="main-actions">
+                            <button onclick="startScanner()" class="w-full bg-black text-white p-8 rounded-3xl font-black text-xl mb-8 flex flex-col items-center justify-center gap-4 shadow-2xl active:scale-95 transition">
+                                <span class="text-4xl">📸</span>
+                                <span>SKENUOTI QR KODĄ</span>
+                            </button>
                         </div>
 
-                        <div class="space-y-3">
-                            <p class="text-xs font-bold text-gray-400 uppercase tracking-widest px-2">Rankinis pasirinkimas</p>
+                        <div id="scanner-wrapper" class="hidden fixed inset-0 bg-black z-50 p-4 flex flex-col justify-center">
+                            <div class="flex justify-between items-center mb-4 text-white">
+                                <h3 class="font-bold text-lg">Skenuokite printerio QR</h3>
+                                <button onclick="stopScanner()" class="bg-white/20 px-4 py-2 rounded-xl text-sm font-bold">Uždaryti</button>
+                            </div>
+                            <div id="reader" class="overflow-hidden rounded-3xl border-2 border-white/30"></div>
+                            <p class="text-white/60 text-center mt-6 text-sm italic text-center">Nukreipkite kamerą į lipduką ant printerio</p>
+                        </div>
+
+                        <div class="space-y-4">
+                            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Rankinis pasirinkimas (50 vnt.)</h3>
                             ${printers.map(p => `
-                                <div onclick="openPrinter('${p.id}')" class="bg-white p-4 rounded-xl border flex justify-between items-center active:bg-gray-50">
-                                    <div class="font-bold">${p.id}</div>
-                                    <div class="text-blue-600 text-sm">Atidaryti →</div>
+                                <div onclick="openPrinter('${p.id}')" class="bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm active:bg-blue-50 transition cursor-pointer">
+                                    <div>
+                                        <div class="font-black text-gray-800 text-lg">${p.id}</div>
+                                        <div class="text-xs text-gray-500">${p.name}</div>
+                                    </div>
+                                    <div class="h-10 w-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">→</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -72,80 +86,13 @@
             else if (state.view === 'printer') {
                 const p = state.selectedPrinter;
                 app.innerHTML = `
-                    <div class="bg-white p-6 shadow-md flex items-center justify-between">
-                        <button onclick="state.view='dashboard'; render()" class="text-blue-600 font-bold">← Grįžti</button>
-                        <h2 class="font-black">${p.id}</h2>
+                    <div class="fixed top-0 left-0 right-0 bg-white p-4 border-b flex items-center justify-between z-10">
+                        <button onclick="state.view='dashboard'; render()" class="text-blue-600 font-bold px-2 text-lg">←</button>
+                        <div class="text-center leading-tight">
+                            <h2 class="font-black text-gray-800 uppercase tracking-tighter">${p.id}</h2>
+                            <p class="text-[10px] text-gray-400 font-bold uppercase">${p.sn}</p>
+                        </div>
                         <div class="w-10"></div>
                     </div>
-                    <div class="p-6">
-                        <div class="bg-gray-50 p-6 rounded-2xl mb-6 border-2 border-dashed border-gray-200 text-center" onclick="document.getElementById('fileInput').click()">
-                            <input type="file" id="fileInput" class="hidden" accept="image/*" capture="camera" onchange="handleUpload()">
-                            <div class="text-5xl mb-4">📸</div>
-                            <p class="font-bold text-lg text-gray-800">Nufotografuoti Nozzle Check</p>
-                            <p class="text-gray-500 text-sm mt-2 font-medium">Paspauskite čia, kad atidarytumėte kamerą</p>
-                        </div>
-                        <div id="status" class="hidden p-4 bg-green-500 text-white rounded-xl text-center font-bold animate-bounce">
-                            Sėkmingai išsiųsta!
-                        </div>
-                    </div>`;
-            }
-        }
-
-        // --- LOGIKA ---
-
-        function login() {
-            const id = document.getElementById('userId').value;
-            if (id) { state.user = id; state.view = 'dashboard'; render(); }
-        }
-
-        function logout() {
-            stopScanner();
-            state.view = 'login';
-            render();
-        }
-
-        function startScanner() {
-            document.getElementById('scanner-container').classList.remove('hidden');
-            html5QrCode = new Html5Qrcode("reader");
-            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-
-            html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
-                // ČIA LOGIKA: Atpažįstame ID iš jūsų URL
-                // Jei QR yra "servisas.lt/EQ-48", mes paimame galą
-                const foundPrinter = printers.find(p => decodedText.includes(p.id));
-                
-                if (foundPrinter) {
-                    stopScanner();
-                    openPrinter(foundPrinter.id);
-                } else {
-                    alert("Atpažintas kodas: " + decodedText + ". Šio printerio sistemoje nėra.");
-                }
-            });
-        }
-
-        function stopScanner() {
-            if (html5QrCode) {
-                html5QrCode.stop().then(() => {
-                    document.getElementById('scanner-container').classList.add('hidden');
-                }).catch(() => {});
-            }
-        }
-
-        function openPrinter(id) {
-            state.selectedPrinter = printers.find(p => p.id === id);
-            state.view = 'printer';
-            render();
-        }
-
-        function handleUpload() {
-            document.getElementById('status').classList.remove('hidden');
-            setTimeout(() => {
-                state.view = 'dashboard';
-                render();
-            }, 2000);
-        }
-
-        render();
-    </script>
-</body>
-</html>
+                    <div class="p-6 pt-24 text-center">
+                        <div class="bg-white p-8 rounded-3xl border-2 border-
