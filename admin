@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrinterCheck ADMIN</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-100 p-6 font-sans">
+    <div class="max-w-6xl mx-auto">
+        <header class="flex justify-between items-center mb-10">
+            <h1 class="text-3xl font-black italic uppercase tracking-tighter text-blue-600">Patikros žurnalas</h1>
+            <button onclick="loadData()" class="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold active:scale-95 transition-all shadow-lg shadow-blue-200">ATNAUJINTI</button>
+        </header>
+        <div id="gallery" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <p class="col-span-full py-20 font-bold text-gray-400 uppercase text-center tracking-widest">Kraunami duomenys...</p>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://uzffsxjdiyrghjsdtjos.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_IoeibCKt5UBXZBDzuL_s-A_B5uZtScR';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function loadData() {
+            const gallery = document.getElementById('gallery');
+            const { data, error } = await supabaseClient.from('NozzleChecks').select('*').order('date', { ascending: false });
+            if (error) { gallery.innerHTML = `<p class="text-red-500">${error.message}</p>`; return; }
+
+            gallery.innerHTML = data.map(item => `
+                <div class="bg-white rounded-[2.5rem] shadow-sm border border-gray-200 overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-1">
+                    <div class="p-6 flex justify-between items-center bg-white border-b border-gray-50">
+                        <div><span class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Įrenginys</span><span class="text-2xl font-black italic text-blue-600">${item.printer_id}</span></div>
+                        <span class="${item.status === 'OK' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} px-5 py-2 rounded-2xl font-black text-xs">${item.status}</span>
+                    </div>
+                    <div class="w-full aspect-square bg-gray-50 overflow-hidden border-b border-gray-100">
+                        <img src="${item.image_url}" class="w-full h-full object-cover cursor-zoom-in" onclick="window.open(this.src)">
+                    </div>
+                    <div class="p-6 bg-gray-50 grid grid-cols-2 items-center">
+                         <div><span class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Operatorius</span><span class="font-bold text-gray-700">${item.operator}</span></div>
+                         <div class="text-right"><span class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Laikas</span><span class="text-[10px] font-bold text-gray-400 italic">${new Date(item.created_at || Date.now()).toLocaleString('lt-LT')}</span></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        loadData();
+    </script>
+</body>
+</html>
